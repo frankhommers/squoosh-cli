@@ -2,61 +2,63 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## プロジェクト概要
+## Project Overview
 
-`squoosh-cli-on-docker`は、Google Chromeチームが開発したsquoosh-cliをDocker環境で利用するためのツールです。画像最適化を行うコマンドラインインターフェースを提供します。
+`squoosh-cli-on-docker` makes the Google Chrome team's `squoosh-cli` available through Docker. It provides a command-line interface for image optimization without requiring a local Node setup that matches the older working runtime.
 
-## アーキテクチャ
+## Architecture
 
-### コアコンポーネント
+### Core Components
 
-- **main.sh**: メインのシェルスクリプト。標準入力と引数の両方に対応し、画像ファイルの圧縮処理を管理
-- **Dockerfile**: Node.js 14.19.0ベースのコンテナで@squoosh/cliをインストール
-- **sample/**: テスト用のサンプル画像ファイル
+- **main.sh**: Main shell script. Supports both stdin and direct file-path arguments and manages single-image compression.
+- **squoosh.sh**: Thin Docker wrapper that forwards arbitrary CLI arguments to the containerized `squoosh-cli`.
+- **Dockerfile**: Node.js 14.19.0-based container with global `@squoosh/cli` installation.
+- **sample/**: Sample images for quick verification.
 
-### 処理フロー
+### Processing Flow
 
-1. 入力検証（ファイル存在確認、引数チェック）
-2. 作業ディレクトリ（デフォルト: /tmp/squoosh）の準備
-3. 入力ファイルを作業ディレクトリにコピー
-4. 拡張子に応じたDocker圧縮処理実行
-   - JPG: mozjpeg（quality:30）
-   - PNG: oxipng（quality:30）
-5. 圧縮済みファイルを元ディレクトリに移動
+1. Validate the input file and optional flags.
+2. Prepare a working directory (default: `/tmp/squoosh`).
+3. Copy the input file into the working directory.
+4. Run Dockerized compression based on file extension.
+   - JPG: `mozjpeg` with `quality:30`
+   - PNG: `oxipng` with `quality:30`
+5. Move the optimized file back to the original directory.
 
-### 入力処理
+### Input Handling
 
-- 標準入力からのパイプ入力をサポート
-- ファイルパス引数をサポート
-- --force/-fオプションで上書き保存可能（デフォルトは_squooshサフィックス付与）
+- Supports stdin path input.
+- Supports direct file-path arguments.
+- Supports `--force`/`-f` to overwrite the source file; otherwise creates an `_squoosh` copy.
 
-## 開発コマンド
+## Development Commands
 
-### ビルド
+### Build
 ```bash
-docker build -t koboriakira/squoosh-cli:{version} .
+docker build -t ghcr.io/frankhommers/squoosh-cli:{version} .
 ```
 
-### 実行
+### Run
 ```bash
-# 直接Docker実行
-docker run --rm -v {画像ディレクトリ}:/var koboriakira/squoosh-cli squoosh-cli --mozjpeg '{quality:30}' -d /var /var/{画像ファイル}
+# Direct Docker usage
+docker run --rm -v "$(pwd)":/work -w /work ghcr.io/frankhommers/squoosh-cli:latest --mozjpeg '{"quality":30}' -d /work sample/sample1.jpg
 
-# シェルスクリプト経由（推奨）
+# Through shell wrappers
 bash main.sh sample/sample1.jpg
-bash main.sh sample/sample1.jpg --force  # 上書き保存
+bash main.sh sample/sample1.jpg --force
+./squoosh.sh --help
 ```
 
-### テスト
+### Test
 ```bash
-# サンプル画像でのテスト
+# Smoke tests with sample images
 bash main.sh sample/sample1.jpg
 bash main.sh sample/sample2.png
 ```
 
-## 重要な制約
+## Important Constraints
 
-- jpg,png形式のみサポート（webp対応は未実装）
-- Docker環境必須
-- 作業用の一時ディレクトリが必要（WORKDIR環境変数で変更可能）
-- 拡張子の大文字小文字に対応済み
+- Only jpg/jpeg/png flows are implemented in the helper scripts.
+- Docker is required.
+- A temporary working directory is required and can be overridden with `WORKDIR`.
+- File extension matching is case-insensitive.
